@@ -11,7 +11,7 @@ There is no framework and no build tool, just HTML, CSS and JavaScript.
 
 ## What's on the page
 
-- **Language switch:** English (default), Polski and Magyar. The choice is remembered and kept in the link.
+- **Language switch:** English, Polski and Magyar. Phones set to Polish or Hungarian open in that language; everyone else gets English. A visitor's own pick is remembered and kept in the link.
 - **Carousel of all 42 photos:** it moves sideways only, one photo per swipe, and opens on photo 20 (the two of us at the signing). Every photo has a Download button.
 - **Play slideshow:** opens the full-screen viewer and moves to the next photo every 5 seconds, with a Pause button.
 - **Grid in two chapters:** The ceremony (01–26) and In the garden (28–53).

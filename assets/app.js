@@ -34,11 +34,17 @@ let loadFailed = false;
 /* ---------- Language ---------- */
 
 const codes = LANGUAGES.map((l) => l.code);
+// Order: a ?lang= link, then the visitor's own pick, then the phone's language
+// if it is Polish or Hungarian, otherwise English. Only a pick is remembered.
 let lang = (() => {
   const fromLink = new URLSearchParams(location.search).get("lang");
   if (codes.includes(fromLink)) return fromLink;
   const saved = store.get("gallery-lang");
-  return codes.includes(saved) ? saved : "en";
+  if (codes.includes(saved)) return saved;
+  const fromPhone = (navigator.languages || [navigator.language])
+    .map((l) => String(l || "").slice(0, 2).toLowerCase())
+    .find((c) => codes.includes(c));
+  return fromPhone || "en";
 })();
 
 function t(key, ...args) {
