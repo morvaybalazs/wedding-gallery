@@ -3,7 +3,7 @@
 Reads ~/Photos/Wedding/Final (same file names in each folder) and writes:
   photos/<version>/<large|thumb>/<id>.jpg   web copies for the page
   dist/Niki-and-Balazs-<Version>.zip        full-size copies for "Download all"
-  photos.json                               sizes per version, chapters, zip sizes
+  photos.json                               sizes and colour washes per version, chapters, zip sizes
 
 Every copy is re-saved without camera metadata or location (the sRGB colour
 profile is kept).
@@ -50,6 +50,12 @@ def save(img, path, long_edge, quality, icc):
     return img.size
 
 
+def tones(img):
+    """Average colour of the top, middle and bottom third: a soft wash shown while the photo loads."""
+    small = img.resize((1, 3), Image.BOX)
+    return " ".join("#%02x%02x%02x" % small.getpixel((0, y)) for y in range(3))
+
+
 def full_size_bytes(img, icc):
     buf = io.BytesIO()
     img.save(buf, "JPEG", quality=95, subsampling=0, optimize=True, icc_profile=icc)
@@ -71,13 +77,14 @@ def main():
     photos = []
     for number, name in enumerate(names, 1):
         pid = name.split(" - ")[0]
-        entry = {"id": pid, "chapter": "ceremony" if int(pid) <= CEREMONY_LAST else "garden", "v": {}}
+        entry = {"id": pid, "chapter": "ceremony" if int(pid) <= CEREMONY_LAST else "garden", "v": {}, "g": {}}
         for key, (folder, label) in VERSIONS.items():
             with Image.open(SOURCE / folder / name) as im:
                 icc = im.info.get("icc_profile")  # keep the colour profile (sRGB)
                 im = ImageOps.exif_transpose(im).convert("RGB")
                 sizes = {size: save(im, OUT / key / size / f"{pid}.jpg", edge, q, icc) for size, (edge, q) in SIZES.items()}
                 entry["v"][key] = list(sizes["large"])
+                entry["g"][key] = tones(im)
                 if MAKE_ZIPS:
                     zips[key].writestr(f"Niki & Balazs - {label.replace('-', ' ')}/Niki-and-Balazs-{number:02d}.jpg", full_size_bytes(im, icc))
         photos.append(entry)
