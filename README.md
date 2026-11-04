@@ -50,7 +50,7 @@ python3 tools/build_photos.py
 
 Add `--no-zips` to skip the zips. To change where the ceremony chapter ends, edit `CEREMONY_LAST` in the same file.
 
-After a rebuild, commit and push; Pages republishes in about a minute. If the zips changed, replace the release files as well:
+After a rebuild, commit and push; Pages republishes in about a minute. Browsers may keep old copies for up to 10 minutes, so after changing `style.css`, `i18n.js` or `app.js`, bump the `?v=` number on those three links in `index.html`. If the zips changed, replace the release files as well:
 
 ```sh
 gh release upload photos dist/*.zip --clobber

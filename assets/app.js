@@ -507,7 +507,7 @@ renderLanguages();
 setupViewer();
 applyLanguage(); // text appears in the chosen language straight away
 
-fetch("photos.json")
+fetch("photos.json", { cache: "no-cache" })
   .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
   .then((data) => {
     photos = data.photos;
