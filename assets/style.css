@@ -44,14 +44,52 @@ em { font-style: italic; color: var(--wine); }
 }
 
 .meta {
-  display: flex;
-  justify-content: space-between;
-  padding-bottom: 14px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--line);
   font-size: 12px;
   font-weight: 500;
   letter-spacing: .2em;
   text-transform: uppercase;
+}
+.meta-date { justify-self: start; }
+.meta .meta-link { justify-self: end; }
+
+/* Language: three visible choices, flag + name, one tap. */
+.langs {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px;
+  background: var(--paper);
+  letter-spacing: normal;
+  text-transform: none;
+}
+.langs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 13px 0 9px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 400;
+  color: #55554f;
+  cursor: pointer;
+  transition: background .25s, color .25s;
+}
+.langs button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.langs img {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(18, 18, 18, .12);
 }
 
 h1 {
@@ -468,6 +506,8 @@ main {
 
 @media (max-width: 700px) {
   :root { --row: 210px; --gap: 6px; }
+  .meta { grid-template-columns: auto auto; justify-content: space-between; row-gap: 14px; letter-spacing: .1em; white-space: nowrap; }
+  .langs { grid-column: 1 / -1; grid-row: 1; justify-self: center; }
   .is-framed .rows { --gap-now: 14px; }
   .carousel { --slide-h: min(64vh, 106vw); gap: 10px; }
   .bar-inner { justify-content: center; }

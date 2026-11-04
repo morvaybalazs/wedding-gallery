@@ -18,37 +18,39 @@
   <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
   <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=boska@300,301,400,401&f[]=switzer@300,400,500&display=swap">
   <link rel="stylesheet" href="assets/style.css">
+  <script src="assets/i18n.js" defer></script>
   <script src="assets/app.js" defer></script>
 </head>
 <body>
   <header class="intro">
     <div class="meta">
-      <span>28.08.2026</span>
-      <a href="#download-all" class="meta-link">Download all</a>
+      <span class="meta-date" data-i18n="date">28.08.2026</span>
+      <div class="langs" id="langs" role="group" data-i18n-aria="language" aria-label="Language"></div>
+      <a href="#download-all" class="meta-link" data-i18n="downloadAllLink">Download all</a>
     </div>
     <h1>Niki <em>&amp;</em> Balázs</h1>
     <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 2.5a9.5 9.5 0 1 0 7 15.9A8 8 0 0 1 14.5 2.5z"/></svg>
-    <p class="lede">We wanted to share our day with you.</p>
+    <p class="lede" data-i18n="lede">We wanted to share our day with you.</p>
   </header>
 
-  <section class="highlights" aria-label="All photos, one at a time">
+  <section class="highlights" data-i18n-aria="carousel" aria-label="All photos, one at a time">
     <div class="carousel" id="carousel" tabindex="0"></div>
     <div class="carousel-nav">
-      <button class="round" id="prev" aria-label="Previous photo">
+      <button class="round" id="prev" data-i18n-aria="prev" aria-label="Previous photo">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
       </button>
       <div class="progress"><span id="progress"></span></div>
       <span class="count" id="carousel-count"></span>
-      <button class="round" id="next" aria-label="Next photo">
+      <button class="round" id="next" data-i18n-aria="next" aria-label="Next photo">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
       </button>
     </div>
-    <p class="hint">Tap a photo to see it full screen. Every photo has a Download button.</p>
+    <p class="hint" id="hint"></p>
   </section>
 
   <div class="bar">
     <div class="bar-inner">
-      <span class="bar-label">How would you like to see them?</span>
+      <span class="bar-label" data-i18n="viewQuestion">How would you like to see them?</span>
       <div class="controls" data-controls></div>
     </div>
   </div>
@@ -58,23 +60,23 @@
   <section class="take-home" id="download-all" hidden>
     <div class="chapter-head">
       <span class="num">iii.</span>
-      <h2>Download all</h2>
+      <h2 data-i18n="downloadHeading">Download all</h2>
     </div>
-    <p class="take-home-lede">Every photo at full size, ready to keep or print. Pick a version; each one comes as a single zip file.</p>
+    <p class="take-home-lede" data-i18n="downloadLede"></p>
     <div class="zips" id="zips"></div>
-    <p class="small">These are large files, so Wi-Fi is best. On an iPhone or iPad they save to the Files app. To save a single photo to your Photos instead, open it and tap Download.</p>
+    <p class="small" data-i18n="downloadNote"></p>
   </section>
 
   <footer class="outro">
     <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 2.5a9.5 9.5 0 1 0 7 15.9A8 8 0 0 1 14.5 2.5z"/></svg>
-    <p class="sign">With love,<br>Niki <em>&amp;</em> Balázs</p>
+    <p class="sign"><span data-i18n="signOff">With love,</span><br>Niki <em>&amp;</em> Balázs</p>
   </footer>
 
-  <dialog class="viewer" id="viewer" aria-label="Photo viewer">
+  <dialog class="viewer" id="viewer" data-i18n-aria="viewer" aria-label="Photo viewer">
     <div class="viewer-top">
       <span class="count" id="viewer-count"></span>
       <div class="controls" data-controls></div>
-      <button class="text-btn" id="close">Close
+      <button class="text-btn" id="close"><span data-i18n="close">Close</span>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
       </button>
     </div>
@@ -82,14 +84,14 @@
       <img id="viewer-img" alt="">
     </div>
     <div class="viewer-bottom">
-      <button class="round big" id="viewer-prev" aria-label="Previous photo">
+      <button class="round big" id="viewer-prev" data-i18n-aria="prev" aria-label="Previous photo">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
       </button>
       <button class="download" id="download">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>
-        <span>Download photo</span>
+        <span data-i18n="downloadPhoto">Download photo</span>
       </button>
-      <button class="round big" id="viewer-next" aria-label="Next photo">
+      <button class="round big" id="viewer-next" data-i18n-aria="next" aria-label="Next photo">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
       </button>
     </div>
