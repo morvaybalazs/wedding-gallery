@@ -8,7 +8,7 @@ const CHAPTERS = [
 ];
 const OPENER_ID = "20";  // the carousel starts with the two of us, then runs in order
 const PREVIEW_ID = "30"; // the photo on the "Download all" card
-const SLIDESHOW_MS = 5000;
+const SLIDESHOW_MS = 3500;
 const ZIP_BASE = "https://github.com/morvaybalazs/wedding-gallery/releases/download/photos/";
 const ZIP_LABELS = { "framed-bw": "zipFramedBw", "framed-colour": "zipFramedColour", "bw": "zipBw", "colour": "zipColour" };
 const ICON_DOWNLOAD = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>';
@@ -344,11 +344,12 @@ function buildZips() {
   const main = version();
   if (!zipInfo || !zipInfo[main] || !photos.length) return;
   $("zip-main").href = ZIP_BASE + zipInfo[main].file;
+  if (touch) { $("zip-main").target = "_blank"; $("zip-main").rel = "noopener"; }
   $("zip-main-img").src = src(byId[PREVIEW_ID] || photos[0], "thumb", main);
   $("download-lede").textContent = t("downloadLede", photos.length);
   $("zip-main-meta").textContent = t("zipMainMeta", t(ZIP_LABELS[main]), zipInfo[main].mb);
   $("zip-list").innerHTML = Object.entries(ZIP_LABELS).filter(([key]) => key !== main && zipInfo[key]).map(([key, label]) => `
-    <a class="zip-link" href="${ZIP_BASE}${zipInfo[key].file}" download>
+    <a class="zip-link" href="${ZIP_BASE}${zipInfo[key].file}"${touch ? ' target="_blank" rel="noopener"' : ""}>
       ${ICON_DOWNLOAD}<span class="zip-link-name">${t(label)}</span><span class="zip-link-size">${zipInfo[key].mb} MB</span>
     </a>`).join("");
   $("download-all").hidden = false;

@@ -13,7 +13,7 @@ There is no framework and no build tool, just HTML, CSS and JavaScript.
 
 - **Language switch:** English, Polski and Magyar. Phones set to Polish or Hungarian open in that language; everyone else gets English. A visitor's own pick is remembered and kept in the link.
 - **Carousel of all 42 photos:** it moves sideways only, one photo per swipe, and opens on photo 20 (the two of us at the signing). Every photo has a Download button.
-- **Play slideshow:** opens the full-screen viewer and moves to the next photo every 5 seconds, with a Pause button.
+- **Play slideshow:** opens the full-screen viewer and moves to the next photo every 3.5 seconds, with a Pause button.
 - **Grid in two chapters:** The ceremony (01–26) and In the garden (28–53).
 - **Black & white and Framed switches:** both on by default, so first-time visitors see black & white prints. Each visitor's choice is remembered. The main "Download all" button follows the version on screen.
 - **Full-screen viewer:** Close, Previous/Next, swipe, pinch-zoom, and Download photo.
