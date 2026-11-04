@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Niki & Balázs</title>
+  <meta name="description" content="Photographs from our wedding, 28 August 2026.">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#fafaf8">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Niki & Balázs · 28 August 2026">
+  <meta property="og:description" content="Photographs from our wedding day.">
+  <meta property="og:image" content="https://morvaybalazs.github.io/wedding-gallery/assets/share.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+  <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=boska@300,301,400,401&f[]=switzer@300,400,500&display=swap">
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="assets/app.js" defer></script>
+</head>
+<body>
+  <header class="intro">
+    <div class="meta">
+      <span>28.08.2026</span>
+      <span id="total">Our wedding</span>
+    </div>
+    <h1>Niki <em>&amp;</em> Balázs</h1>
+    <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 2.5a9.5 9.5 0 1 0 7 15.9A8 8 0 0 1 14.5 2.5z"/></svg>
+    <p class="lede">Thank you for being part of our day.</p>
+  </header>
+
+  <section class="highlights" aria-label="Highlights">
+    <div class="carousel" id="carousel" tabindex="0"></div>
+    <div class="carousel-nav">
+      <button class="round" id="prev" aria-label="Previous highlight">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="progress"><span id="progress"></span></div>
+      <span class="count" id="carousel-count"></span>
+      <button class="round" id="next" aria-label="Next highlight">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  </section>
+
+  <div class="bar">
+    <div class="bar-inner">
+      <span class="bar-label">How would you like to see them?</span>
+      <div class="controls" data-controls></div>
+    </div>
+  </div>
+
+  <main id="gallery"></main>
+
+  <footer class="outro">
+    <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 2.5a9.5 9.5 0 1 0 7 15.9A8 8 0 0 1 14.5 2.5z"/></svg>
+    <p class="sign">With love,<br>Niki <em>&amp;</em> Balázs</p>
+  </footer>
+
+  <dialog class="viewer" id="viewer" aria-label="Photo viewer">
+    <div class="viewer-top">
+      <span class="count" id="viewer-count"></span>
+      <div class="controls" data-controls></div>
+      <button class="text-btn" id="close">Close
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="viewer-stage">
+      <img id="viewer-img" alt="">
+    </div>
+    <div class="viewer-bottom">
+      <button class="round big" id="viewer-prev" aria-label="Previous photo">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <button class="download" id="download">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>
+        <span id="download-label">Download photo</span>
+      </button>
+      <button class="round big" id="viewer-next" aria-label="Next photo">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  </dialog>
+</body>
+</html>
