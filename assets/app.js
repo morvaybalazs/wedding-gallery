@@ -1,10 +1,19 @@
-// Wedding gallery: highlights carousel, chapter grid and a full-screen viewer.
+// Wedding gallery: carousel of every photo, chapter grid, full-screen viewer,
+// Colour/B&W and Plain/Framed switches, and downloads.
 // Photos come from photos.json (made by tools/build_photos.py).
 
 const CHAPTERS = [
   { key: "ceremony", number: "i.", title: "The ceremony" },
-  { key: "gardens", number: "ii.", title: "In the gardens" },
+  { key: "garden", number: "ii.", title: "In the garden" },
 ];
+const ZIP_BASE = "https://github.com/morvaybalazs/wedding-gallery/releases/latest/download/";
+const ZIP_LABELS = {
+  "colour": "Colour",
+  "bw": "Black & white",
+  "framed-colour": "Framed colour",
+  "framed-bw": "Framed black & white",
+};
+const PREVIEW_ID = "30"; // the photo shown on each "Download all" card
 
 const state = { tone: "colour", framed: false };
 let photos = [];
@@ -19,13 +28,14 @@ try {
 
 const $ = (id) => document.getElementById(id);
 const version = () => (state.framed ? "framed-" : "") + state.tone;
-const src = (p, size) => `photos/${version()}/${size}/${p.id}.jpg`;
+const src = (p, size, v = version()) => `photos/${v}/${size}/${p.id}.jpg`;
 const ratio = (p) => { const [w, h] = p.v[version()]; return w / h; };
 const touch = matchMedia("(pointer: coarse)").matches;
+const ICON_DOWNLOAD = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>';
 
 function img(p, size, eager) {
   const el = document.createElement("img");
-  el.alt = `Wedding photo ${p.id}`;
+  el.alt = `Wedding photo ${photos.indexOf(p) + 1}`;
   el.decoding = "async";
   if (!eager) el.loading = "lazy";
   el.dataset.id = p.id;
@@ -78,35 +88,47 @@ function applyVersion() {
       }
       el.dataset.want = next;
     }
-    el.parentElement.style.setProperty("--r", ratio(p));
+    el.closest("[data-r]").style.setProperty("--r", ratio(p));
   });
   if (viewer.open) showInViewer(viewerIndex, false);
   layoutRows();
   requestAnimationFrame(centreEnds);
 }
 
-/* ---------- Highlights carousel ---------- */
+/* ---------- Carousel of every photo ---------- */
 
 const carousel = $("carousel");
 let slides = [];
 let current = 0;
 let autoplay;
 
-function buildCarousel(ids) {
-  const list = ids.map((id) => byId[id]);
-  slides = list.map((p, i) => {
-    const b = document.createElement("button");
-    b.className = "slide";
-    b.type = "button";
-    b.setAttribute("aria-label", `Open highlight ${i + 1} of ${list.length}`);
-    b.style.setProperty("--r", ratio(p));
-    b.append(img(p, "large", i < 2));
-    b.addEventListener("click", () => {
-      if (i === current) openViewer(photos.indexOf(p));
-      else goTo(i); // a tap on a peeking photo brings it to the centre first
+function buildCarousel() {
+  slides = photos.map((p, i) => {
+    const card = document.createElement("div");
+    card.className = "slide";
+    card.dataset.r = "";
+    card.style.setProperty("--r", ratio(p));
+
+    const open = document.createElement("button");
+    open.className = "slide-open";
+    open.type = "button";
+    open.setAttribute("aria-label", `Open photo ${i + 1} of ${photos.length} full screen`);
+    open.append(img(p, "large", i < 2));
+    open.addEventListener("click", () => {
+      if (i === current) openViewer(i);
+      else { stopAutoplay(); goTo(i); } // a tap on a peeking photo brings it to the centre first
     });
-    carousel.append(b);
-    return b;
+
+    const dl = document.createElement("button");
+    dl.className = "card-dl";
+    dl.type = "button";
+    dl.innerHTML = `${ICON_DOWNLOAD}<span>Download</span>`;
+    dl.setAttribute("aria-label", `Download photo ${i + 1}`);
+    dl.addEventListener("click", () => { stopAutoplay(); downloadPhoto(p); });
+
+    card.append(open, dl);
+    carousel.append(card);
+    return card;
   });
 
   carousel.addEventListener("scroll", () => {
@@ -150,10 +172,11 @@ function markCurrent() {
   });
   current = best;
   slides.forEach((s, i) => s.classList.toggle("current", i === best));
-  $("carousel-count").textContent = `${String(best + 1).padStart(2, "0")} / ${String(slides.length).padStart(2, "0")}`;
+  $("carousel-count").textContent = `${String(best + 1).padStart(2, "0")} / ${slides.length}`;
   $("progress").style.width = `${((best + 1) / slides.length) * 100}%`;
   $("prev").disabled = best === 0;
   $("next").disabled = best === slides.length - 1;
+  if (touch && navigator.canShare) blob(src(photos[best], "large")); // ready for an instant share
 }
 
 function goTo(i, instant) {
@@ -167,7 +190,7 @@ function goTo(i, instant) {
 
 function stopAutoplay() { clearInterval(autoplay); }
 
-/* ---------- Gallery ---------- */
+/* ---------- Gallery grid ---------- */
 
 function buildGallery() {
   const main = $("gallery");
@@ -183,7 +206,8 @@ function buildGallery() {
       const b = document.createElement("button");
       b.className = "tile";
       b.type = "button";
-      b.setAttribute("aria-label", `Open photo ${photos.indexOf(p) + 1} of ${photos.length}`);
+      b.dataset.r = "";
+      b.setAttribute("aria-label", `Open photo ${photos.indexOf(p) + 1} of ${photos.length} full screen`);
       b.style.setProperty("--r", ratio(p));
       b.append(img(p, "thumb"));
       b.addEventListener("click", () => openViewer(photos.indexOf(p)));
@@ -192,7 +216,6 @@ function buildGallery() {
     sec.append(rows);
     main.append(sec);
   });
-  $("total").textContent = `${photos.length} photographs`;
   let lastWidth = 0;
   addEventListener("resize", () => {
     if (main.clientWidth !== lastWidth) { lastWidth = main.clientWidth; layoutRows(); }
@@ -235,19 +258,32 @@ function layoutRows() {
       const isLast = i === rows.length - 1 && h > target;
       row.className = isLast ? "row last" : "row";
       row.style.height = `${isLast ? target : h}px`;
-      if (isLast) g.forEach((t) => { t.style.width = `${t._r * target}px`; });
-      else g.forEach((t) => { t.style.width = ""; });
+      g.forEach((t) => { t.style.width = isLast ? `${t._r * target}px` : ""; });
       row.append(...g);
       return row;
     }));
   });
 }
 
+/* ---------- Download all ---------- */
+
+function buildZips(zips) {
+  if (!zips) return;
+  $("zips").innerHTML = Object.entries(ZIP_LABELS).filter(([key]) => zips[key]).map(([key, label]) => `
+    <a class="zip" href="${ZIP_BASE}${zips[key].file}" download>
+      <img src="${src(byId[PREVIEW_ID] || photos[0], "thumb", key)}" alt="" loading="lazy">
+      <span class="zip-name">${label}</span>
+      <span class="zip-meta">${photos.length} photos · ${zips[key].mb} MB</span>
+      <span class="zip-go">${ICON_DOWNLOAD}Download zip</span>
+    </a>`).join("");
+  $("download-all").hidden = false;
+}
+
 /* ---------- Viewer ---------- */
 
 const viewer = $("viewer");
 const viewerImg = $("viewer-img");
-const blobs = new Map(); // url -> Promise<Blob>, so sharing on iPhone can start straight away
+const blobs = new Map(); // url -> Promise<Blob>, so sharing on a phone can start straight away
 
 function openViewer(i) {
   stopAutoplay();
@@ -261,7 +297,7 @@ function showInViewer(i, fade = true) {
   viewerIndex = (i + photos.length) % photos.length;
   const p = photos[viewerIndex];
   const url = src(p, "large");
-  const swap = () => { viewerImg.src = url; viewerImg.alt = `Wedding photo ${p.id}`; };
+  const swap = () => { viewerImg.src = url; viewerImg.alt = `Wedding photo ${viewerIndex + 1}`; };
   if (fade) {
     viewerImg.classList.add("fading");
     const pre = new Image();
@@ -281,10 +317,10 @@ function blob(url) {
   return blobs.get(url);
 }
 
-async function downloadCurrent() {
-  const p = photos[viewerIndex];
+async function downloadPhoto(p) {
   const url = src(p, "large");
-  const name = `Niki-and-Balazs-${p.id}${state.tone === "bw" ? "-bw" : ""}${state.framed ? "-framed" : ""}.jpg`;
+  const n = String(photos.indexOf(p) + 1).padStart(2, "0");
+  const name = `Niki-and-Balazs-${n}${state.tone === "bw" ? "-bw" : ""}${state.framed ? "-framed" : ""}.jpg`;
 
   // Phones: the share sheet offers "Save Image", which puts it in the photo library.
   if (touch && navigator.canShare) {
@@ -311,7 +347,7 @@ function setupViewer() {
   viewer.addEventListener("close", () => { document.documentElement.style.overflow = ""; });
   $("viewer-prev").addEventListener("click", () => showInViewer(viewerIndex - 1));
   $("viewer-next").addEventListener("click", () => showInViewer(viewerIndex + 1));
-  $("download").addEventListener("click", downloadCurrent);
+  $("download").addEventListener("click", () => downloadPhoto(photos[viewerIndex]));
   viewer.addEventListener("keydown", (e) => {
     if (e.key === "ArrowRight") showInViewer(viewerIndex + 1);
     if (e.key === "ArrowLeft") showInViewer(viewerIndex - 1);
@@ -324,7 +360,7 @@ function setupViewer() {
     start = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
   }, { passive: true });
   stage.addEventListener("touchend", (e) => {
-    if (!start || (visualViewport && visualViewport.scale > 1.05)) return;
+    if (!start || (window.visualViewport && visualViewport.scale > 1.05)) return;
     const dx = e.changedTouches[0].clientX - start.x;
     const dy = e.changedTouches[0].clientY - start.y;
     start = null;
@@ -342,7 +378,8 @@ fetch("photos.json")
     document.body.classList.toggle("is-framed", state.framed);
     renderControls();
     buildGallery();
-    buildCarousel(data.highlights);
+    buildCarousel();
+    buildZips(data.zips);
     setupViewer();
     applyVersion();
   });

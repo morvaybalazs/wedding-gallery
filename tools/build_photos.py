@@ -1,33 +1,44 @@
-"""Make web copies of the final wedding photos for the gallery.
+"""Make the gallery's photos from the four finished folders.
 
-Reads the four finished folders (same 42 file names in each), writes
-resized JPEGs with all camera metadata removed, and writes photos.json
-with each image's size so the page can lay out rows before images load.
+Reads ~/Photos/Wedding/Final (same file names in each folder) and writes:
+  photos/<version>/<large|thumb>/<id>.jpg   web copies for the page
+  dist/Niki-and-Balazs-<Version>.zip        full-size copies for "Download all"
+  photos.json                               sizes per version, chapters, zip sizes
 
-Usage:  python3 tools/build_photos.py [path/to/Final]
+Every copy is re-saved without camera metadata or location (the sRGB colour
+profile is kept).
+The zips are too big for the site itself; they are attached to a GitHub release
+(see README) and the page links to the latest release.
+
+Usage:  python3 tools/build_photos.py [path/to/Final] [--no-zips]
 """
 
+import io
 import json
 import sys
+import zipfile
 from pathlib import Path
 
 from PIL import Image, ImageOps
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.home() / "Photos/Wedding/Final"
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+SOURCE = Path(args[0]) if args else Path.home() / "Photos/Wedding/Final"
+MAKE_ZIPS = "--no-zips" not in sys.argv
 OUT = ROOT / "photos"
+DIST = ROOT / "dist"
 
+# key: (source folder, name used in zip files and on the page)
 VERSIONS = {
-    "colour": "Colour",
-    "bw": "Black and White",
-    "framed-colour": "Framed - Colour",
-    "framed-bw": "Framed - Black and White",
+    "colour": ("Colour", "Colour"),
+    "bw": ("Black and White", "Black-and-White"),
+    "framed-colour": ("Framed - Colour", "Framed-Colour"),
+    "framed-bw": ("Framed - Black and White", "Framed-Black-and-White"),
 }
 SIZES = {"large": (2048, 84), "thumb": (900, 78)}  # long edge px, JPEG quality
 
-# Photos up to this number are indoors; the rest are in the gardens.
+# Photos up to this number are indoors; the rest are in the garden.
 CEREMONY_LAST = 26
-HIGHLIGHTS = ["15", "30", "22", "40", "28", "45", "33", "21", "46", "49"]
 
 
 def save(img, path, long_edge, quality, icc):
@@ -39,30 +50,55 @@ def save(img, path, long_edge, quality, icc):
     return img.size
 
 
+def full_size_bytes(img, icc):
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=95, subsampling=0, optimize=True, icc_profile=icc)
+    return buf.getvalue()
+
+
 def main():
-    names = sorted(p.name for p in (SOURCE / VERSIONS["colour"]).glob("*.jpg"))
-    for folder in VERSIONS.values():
-        other = sorted(p.name for p in (SOURCE / folder).glob("*.jpg"))
-        if other != names:
+    names = sorted(p.name for p in (SOURCE / VERSIONS["colour"][0]).glob("*.jpg"))
+    for folder, _ in VERSIONS.values():
+        if sorted(p.name for p in (SOURCE / folder).glob("*.jpg")) != names:
             sys.exit(f"'{folder}' does not hold the same photos as Colour")
 
+    zips = {}
+    if MAKE_ZIPS:
+        DIST.mkdir(exist_ok=True)
+        for key, (_, label) in VERSIONS.items():
+            zips[key] = zipfile.ZipFile(DIST / f"Niki-and-Balazs-{label}.zip", "w", zipfile.ZIP_STORED)
+
     photos = []
-    for name in names:
+    for number, name in enumerate(names, 1):
         pid = name.split(" - ")[0]
-        entry = {"id": pid, "chapter": "ceremony" if int(pid) <= CEREMONY_LAST else "gardens", "v": {}}
-        for key, folder in VERSIONS.items():
+        entry = {"id": pid, "chapter": "ceremony" if int(pid) <= CEREMONY_LAST else "garden", "v": {}}
+        for key, (folder, label) in VERSIONS.items():
             with Image.open(SOURCE / folder / name) as im:
-                icc = im.info.get("icc_profile")
+                icc = im.info.get("icc_profile")  # keep the colour profile (sRGB)
                 im = ImageOps.exif_transpose(im).convert("RGB")
                 for size, (edge, q) in SIZES.items():
                     w, h = save(im, OUT / key / size / f"{pid}.jpg", edge, q, icc)
                 entry["v"][key] = [w, h]  # size of the large copy
+                if MAKE_ZIPS:
+                    zips[key].writestr(f"Niki & Balazs - {label.replace('-', ' ')}/Niki-and-Balazs-{number:02d}.jpg", full_size_bytes(im, icc))
         photos.append(entry)
         print("done", pid)
 
-    data = {"highlights": [h for h in HIGHLIGHTS if h in {p["id"] for p in photos}], "photos": photos}
+    data = {"photos": photos}
+    if MAKE_ZIPS:
+        for z in zips.values():
+            z.close()
+        data["zips"] = {
+            key: {"file": Path(z.filename).name, "mb": round(Path(z.filename).stat().st_size / 1e6)}
+            for key, z in zips.items()
+        }
+    elif (ROOT / "photos.json").exists():
+        old = json.loads((ROOT / "photos.json").read_text())
+        if "zips" in old:
+            data["zips"] = old["zips"]
+
     (ROOT / "photos.json").write_text(json.dumps(data, separators=(",", ":")))
-    print(len(photos), "photos")
+    print(len(photos), "photos", data.get("zips", ""))
 
 
 if __name__ == "__main__":

@@ -6,9 +6,10 @@ https://morvaybalazs.github.io/wedding-gallery/
 There is no framework and no build tool, just HTML, CSS and JavaScript.
 
 - `index.html` is the page.
-- `assets/style.css` and `assets/app.js` hold the design and the behaviour: the highlights carousel, the chapter grid, the full-screen viewer and the Colour/B&W and Plain/Framed switches.
+- `assets/style.css` and `assets/app.js` hold the design and the behaviour: the carousel of every photo, the chapter grid, the full-screen viewer, the Colour/B&W and Plain/Framed switches, and the downloads.
 - `photos/<version>/<large|thumb>/<id>.jpg` are the web copies. The versions are `colour`, `bw`, `framed-colour` and `framed-bw`. Large copies are 2048px on the long edge and thumbnails 900px, all with camera and location data removed.
-- `photos.json` lists every photo with its size per version, plus the highlights shown in the carousel.
+- `photos.json` lists every photo with its size per version, plus the names and sizes of the "Download all" zips.
+- `dist/` (not in git) holds the four full-size zips. They are too big for the site, so they are attached to a GitHub release, and the page links to `releases/latest/download/<file>.zip`.
 
 ## Preview locally
 
@@ -20,13 +21,19 @@ Then open http://127.0.0.1:4321.
 
 ## Change the photos
 
-The photos come from `~/Photos/Wedding/Final`, which holds four folders with the same file names. To rebuild the web copies and `photos.json`:
+The photos come from `~/Photos/Wedding/Final`, which holds four folders with the same file names. To rebuild the web copies, the zips and `photos.json`:
 
 ```sh
 python3 tools/build_photos.py
 ```
 
-To change which photos appear in the carousel, edit `HIGHLIGHTS` in `tools/build_photos.py`. To change where the ceremony chapter ends, edit `CEREMONY_LAST` in the same file. After either change, rebuild, commit and push; Pages republishes in about a minute.
+Add `--no-zips` to skip the zips. To change where the ceremony chapter ends, edit `CEREMONY_LAST` in the same file.
+
+After a rebuild, commit and push; Pages republishes in about a minute. If the zips changed, replace the release files as well:
+
+```sh
+gh release upload photos dist/*.zip --clobber
+```
 
 ## Design
 
