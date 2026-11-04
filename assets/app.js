@@ -1,22 +1,35 @@
-// Wedding gallery: carousel of every photo, chapter grid, full-screen viewer,
-// Colour/B&W and No frame/Framed switches, downloads, and three languages.
+// Wedding gallery: carousel of every photo, chapter grid, full-screen viewer with
+// slideshow, Black & white / Framed switches, downloads, and three languages.
 // Photos come from photos.json (made by tools/build_photos.py); text from i18n.js.
 
 const CHAPTERS = [
   { key: "ceremony", number: "i." },
   { key: "garden", number: "ii." },
 ];
-const ZIP_BASE = "https://github.com/morvaybalazs/wedding-gallery/releases/latest/download/";
-const ZIP_LABELS = { "colour": "zipColour", "bw": "zipBw", "framed-colour": "zipFramedColour", "framed-bw": "zipFramedBw" };
-const PREVIEW_ID = "30"; // the photo shown on each "Download all" card
+const OPENER_ID = "20";  // the carousel starts with the two of us, then runs in order
+const PREVIEW_ID = "30"; // the photo on the "Download all" card
+const SLIDESHOW_MS = 5000;
+const ZIP_BASE = "https://github.com/morvaybalazs/wedding-gallery/releases/download/photos/";
+const ZIP_LABELS = { "framed-bw": "zipFramedBw", "framed-colour": "zipFramedColour", "bw": "zipBw", "colour": "zipColour" };
 const ICON_DOWNLOAD = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>';
+const ICON_TICK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 12.5l3.5 3.5 7.5-8"/></svg>';
 
 const $ = (id) => document.getElementById(id);
 const touch = matchMedia("(pointer: coarse)").matches;
+// iPhone/iPad: the share sheet's "Save Image" is the way into the Photos app.
+// Everywhere else (Android, computers) a normal download is better.
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const shareToSave = isIOS && typeof navigator.canShare === "function";
 const store = {
   get(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } },
   set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
 };
+
+let photos = [];   // in order, as numbered 1-42
+let deck = [];     // carousel order
+let byId = {};
+let zipInfo = null;
+let loadFailed = false;
 
 /* ---------- Language ---------- */
 
@@ -59,7 +72,7 @@ function applyLanguage() {
   document.querySelectorAll("[data-lang]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.lang === lang));
   document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll("[data-i18n-aria]").forEach((el) => el.setAttribute("aria-label", t(el.dataset.i18nAria)));
-  $("hint").textContent = t(touch ? "hintTouch" : "hintMouse");
+  $("hint").textContent = loadFailed ? t("loadError") : t(touch ? "hintTouch" : "hintMouse");
 
   renderControls();
   document.querySelectorAll("[data-chapter]").forEach((head) => {
@@ -67,67 +80,66 @@ function applyLanguage() {
     head.querySelector(".n").textContent = t("photos", Number(head.dataset.count));
   });
   slides.forEach((s, i) => {
-    s.querySelector(".slide-open").setAttribute("aria-label", t("open", i + 1, photos.length));
+    s.querySelector(".slide-open").setAttribute("aria-label", t("open", i + 1, slides.length));
     s.querySelector(".card-dl span").textContent = t("download");
-    s.querySelector(".card-dl").setAttribute("aria-label", t("downloadOne", i + 1));
+    s.querySelector(".card-dl").setAttribute("aria-label", t("downloadOne", number(deck[i])));
   });
-  document.querySelectorAll(".tile").forEach((b) => {
-    const i = photos.indexOf(byId[b.dataset.id]) + 1;
-    b.setAttribute("aria-label", t("open", i, photos.length));
-  });
-  document.querySelectorAll("img[data-id]").forEach((el) => { el.alt = t("alt", photos.indexOf(byId[el.dataset.id]) + 1); });
+  document.querySelectorAll(".tile").forEach((b) => b.setAttribute("aria-label", t("open", number(byId[b.dataset.id]), photos.length)));
+  document.querySelectorAll("img[data-id]").forEach((el) => { el.alt = t("alt", number(byId[el.dataset.id])); });
   buildZips();
   markCurrent();
-  if (viewer.open) $("viewer-count").textContent = t("count", viewerIndex + 1, photos.length);
+  updatePlay();
+  if (viewer.open) showInViewer(viewerIndex, false);
 }
 
-/* ---------- Colour / B&W and No frame / Framed ---------- */
+/* ---------- Black & white and Framed switches ---------- */
 
-const state = { tone: "colour", framed: false };
-const savedView = store.get("gallery-view") || {};
-if (savedView.tone === "bw") state.tone = "bw";
-if (savedView.framed === true) state.framed = true;
+// First-time visitors see black & white prints; anyone who changes it keeps their choice.
+const state = { tone: "bw", framed: true };
+const savedView = store.get("gallery-view");
+if (savedView) {
+  state.tone = savedView.tone === "colour" ? "colour" : "bw";
+  state.framed = savedView.framed !== false;
+}
 
 const version = () => (state.framed ? "framed-" : "") + state.tone;
 const src = (p, size, v = version()) => `photos/${v}/${size}/${p.id}.jpg`;
 const ratio = (p) => { const [w, h] = p.v[version()]; return w / h; };
+const number = (p) => photos.indexOf(p) + 1;
 
 function renderControls() {
+  const chip = (key, label) => `
+    <button type="button" class="chip" role="switch" data-toggle="${key}">
+      <span class="tick">${ICON_TICK}</span><span>${label}</span>
+    </button>`;
   document.querySelectorAll("[data-controls]").forEach((box) => {
-    box.innerHTML = `
-      <div class="seg" role="group" aria-label="${t("toneGroup")}">
-        <button type="button" data-tone="colour">${t("colour")}</button>
-        <button type="button" data-tone="bw">${t("bw")}</button>
-      </div>
-      <div class="seg" role="group" aria-label="${t("frameGroup")}">
-        <button type="button" data-framed="false">${t("plain")}</button>
-        <button type="button" data-framed="true">${t("framed")}</button>
-      </div>`;
+    box.innerHTML = chip("bw", t("bw")) + chip("framed", t("framed"));
   });
-  syncPressed();
+  syncSwitches();
 }
 
-function syncPressed() {
-  document.querySelectorAll("[data-tone]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.tone === state.tone));
-  document.querySelectorAll("[data-framed]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.framed === String(state.framed)));
+function syncSwitches() {
+  document.querySelectorAll("[data-toggle=bw]").forEach((b) => b.setAttribute("aria-checked", state.tone === "bw"));
+  document.querySelectorAll("[data-toggle=framed]").forEach((b) => b.setAttribute("aria-checked", state.framed));
 }
 
 document.addEventListener("click", (e) => {
-  const b = e.target.closest("[data-tone], [data-framed]");
+  const b = e.target.closest("[data-toggle]");
   if (!b) return;
-  if (b.dataset.tone) state.tone = b.dataset.tone;
-  if (b.dataset.framed) state.framed = b.dataset.framed === "true";
+  if (b.dataset.toggle === "bw") state.tone = state.tone === "bw" ? "colour" : "bw";
+  if (b.dataset.toggle === "framed") state.framed = !state.framed;
   store.set("gallery-view", state);
   applyVersion();
 });
 
 function applyVersion() {
-  syncPressed();
+  syncSwitches();
   document.body.classList.toggle("is-framed", state.framed);
 
   document.querySelectorAll("img[data-id]").forEach((el) => {
     const p = byId[el.dataset.id];
     const next = src(p, el.dataset.size);
+    el.dataset.want = next; // the latest choice wins, even if an older copy is still loading
     if (el.getAttribute("src") !== next) {
       if (el.classList.contains("loaded")) {
         // Load the other version first, then swap in one go so nothing blinks.
@@ -137,24 +149,19 @@ function applyVersion() {
       } else {
         el.src = next;
       }
-      el.dataset.want = next;
     }
     el.closest("[data-r]").style.setProperty("--r", ratio(p));
   });
   if (viewer.open) showInViewer(viewerIndex, false);
+  else if (shareToSave && deck[current]) blob(src(deck[current], "large"));
+  buildZips();
   layoutRows();
   requestAnimationFrame(centreEnds);
 }
 
-/* ---------- Shared bits ---------- */
-
-let photos = [];
-let byId = {};
-let zipInfo = null;
-
 function img(p, size, eager) {
   const el = document.createElement("img");
-  el.alt = t("alt", photos.indexOf(p) + 1);
+  el.alt = t("alt", number(p));
   el.decoding = "async";
   if (!eager) el.loading = "lazy";
   el.dataset.id = p.id;
@@ -169,10 +176,9 @@ function img(p, size, eager) {
 const carousel = $("carousel");
 let slides = [];
 let current = 0;
-let autoplay;
 
 function buildCarousel() {
-  slides = photos.map((p, i) => {
+  slides = deck.map((p, i) => {
     const card = document.createElement("div");
     card.className = "slide";
     card.dataset.r = "";
@@ -183,15 +189,15 @@ function buildCarousel() {
     open.type = "button";
     open.append(img(p, "large", i < 2));
     open.addEventListener("click", () => {
-      if (i === current) openViewer(i);
-      else { stopAutoplay(); goTo(i); } // a tap on a peeking photo brings it to the centre first
+      if (i === current) openViewer(deck, i);
+      else goTo(i); // a tap on a peeking photo brings it to the centre first
     });
 
     const dl = document.createElement("button");
     dl.className = "card-dl";
     dl.type = "button";
     dl.innerHTML = `${ICON_DOWNLOAD}<span></span>`;
-    dl.addEventListener("click", () => { stopAutoplay(); downloadPhoto(p); });
+    dl.addEventListener("click", () => downloadPhoto(p));
 
     card.append(open, dl);
     carousel.append(card);
@@ -203,27 +209,22 @@ function buildCarousel() {
     carousel._raf = requestAnimationFrame(markCurrent);
   }, { passive: true });
 
-  $("prev").addEventListener("click", () => { stopAutoplay(); goTo(current - 1); });
-  $("next").addEventListener("click", () => { stopAutoplay(); goTo(current + 1); });
+  $("prev").addEventListener("click", () => goTo(current - 1));
+  $("next").addEventListener("click", () => goTo(current + 1));
   carousel.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowRight") { stopAutoplay(); goTo(current + 1); e.preventDefault(); }
-    if (e.key === "ArrowLeft") { stopAutoplay(); goTo(current - 1); e.preventDefault(); }
+    if (e.key === "ArrowRight") { goTo(current + 1); e.preventDefault(); }
+    if (e.key === "ArrowLeft") { goTo(current - 1); e.preventDefault(); }
   });
-  ["pointerdown", "wheel", "touchstart"].forEach((type) => carousel.addEventListener(type, stopAutoplay, { passive: true }));
+  $("play-all").addEventListener("click", () => { openViewer(deck, current); play(); });
   addEventListener("resize", centreEnds);
-
   centreEnds();
-  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    autoplay = setInterval(() => {
-      if (!document.hidden && !viewer.open) goTo((current + 1) % slides.length);
-    }, 5500);
-  }
 }
 
 // Pad the strip so the first and last photos can sit in the centre.
+// Measure the section, not the strip: the strip's own width includes the old padding.
 function centreEnds() {
   if (!slides.length) return;
-  const w = carousel.clientWidth;
+  const w = carousel.parentElement.clientWidth;
   carousel.style.paddingLeft = `${Math.max(16, (w - slides[0].offsetWidth) / 2)}px`;
   carousel.style.paddingRight = `${Math.max(16, (w - slides[slides.length - 1].offsetWidth) / 2)}px`;
   goTo(current, true);
@@ -243,7 +244,7 @@ function markCurrent() {
   $("progress").style.width = `${((best + 1) / slides.length) * 100}%`;
   $("prev").disabled = best === 0;
   $("next").disabled = best === slides.length - 1;
-  if (touch && navigator.canShare) blob(src(photos[best], "large")); // ready for an instant share
+  if (shareToSave) blob(src(deck[best], "large")); // ready for an instant "Save Image"
 }
 
 function goTo(i, instant) {
@@ -254,8 +255,6 @@ function goTo(i, instant) {
     behavior: instant ? "instant" : "smooth",
   });
 }
-
-function stopAutoplay() { clearInterval(autoplay); }
 
 /* ---------- Gallery grid ---------- */
 
@@ -277,7 +276,7 @@ function buildGallery() {
       b.dataset.id = p.id;
       b.style.setProperty("--r", ratio(p));
       b.append(img(p, "thumb"));
-      b.addEventListener("click", () => openViewer(photos.indexOf(p)));
+      b.addEventListener("click", () => openViewer(photos, photos.indexOf(p)));
       rows.append(b);
     });
     sec.append(rows);
@@ -289,8 +288,8 @@ function buildGallery() {
   });
 }
 
-// Group tiles into rows near the target height; full rows stretch to the edge,
-// the final row keeps the target height.
+// Group tiles into rows near the target height so every row runs edge to edge.
+// A short final row (under 70% full) keeps the target height instead of stretching.
 function layoutRows() {
   document.querySelectorAll(".rows").forEach((box) => {
     const tiles = [...box.querySelectorAll(".tile")];
@@ -298,7 +297,8 @@ function layoutRows() {
     const gap = parseFloat(style.getPropertyValue("--gap-now")) || 0;
     const target = parseFloat(style.getPropertyValue("--row")) || 260;
     const width = box.clientWidth;
-    const heightFor = (group) => (width - gap * (group.length - 1)) / group.reduce((s, tile) => s + tile._r, 0);
+    const sumR = (group) => group.reduce((s, tile) => s + tile._r, 0);
+    const heightFor = (group) => (width - gap * (group.length - 1)) / sumR(group);
 
     tiles.forEach((tile) => { tile._r = parseFloat(tile.style.getPropertyValue("--r")); });
     const rows = [];
@@ -321,11 +321,10 @@ function layoutRows() {
 
     box.replaceChildren(...rows.map((g, i) => {
       const row = document.createElement("div");
-      const h = heightFor(g);
-      const isLast = i === rows.length - 1 && h > target;
-      row.className = isLast ? "row last" : "row";
-      row.style.height = `${isLast ? target : h}px`;
-      g.forEach((tile) => { tile.style.width = isLast ? `${tile._r * target}px` : ""; });
+      const short = i === rows.length - 1 && sumR(g) * target + gap * (g.length - 1) < width * 0.7;
+      row.className = short ? "row last" : "row";
+      row.style.height = `${short ? target : heightFor(g)}px`;
+      g.forEach((tile) => { tile.style.width = short ? `${tile._r * target}px` : ""; });
       row.append(...g);
       return row;
     }));
@@ -334,67 +333,131 @@ function layoutRows() {
 
 /* ---------- Download all ---------- */
 
+// The main button offers the version on screen; the other three are listed beside it.
 function buildZips() {
-  if (!zipInfo) return;
-  $("zips").innerHTML = Object.entries(ZIP_LABELS).filter(([key]) => zipInfo[key]).map(([key, label]) => `
-    <a class="zip" href="${ZIP_BASE}${zipInfo[key].file}" download>
-      <img src="${src(byId[PREVIEW_ID] || photos[0], "thumb", key)}" alt="" loading="lazy">
-      <span class="zip-name">${t(label)}</span>
-      <span class="zip-meta">${t("zipMeta", photos.length, zipInfo[key].mb)}</span>
-      <span class="zip-go">${ICON_DOWNLOAD}${t("downloadZip")}</span>
+  const main = version();
+  if (!zipInfo || !zipInfo[main] || !photos.length) return;
+  $("zip-main").href = ZIP_BASE + zipInfo[main].file;
+  $("zip-main-img").src = src(byId[PREVIEW_ID] || photos[0], "thumb", main);
+  $("download-lede").textContent = t("downloadLede", photos.length);
+  $("zip-main-meta").textContent = t("zipMainMeta", t(ZIP_LABELS[main]), zipInfo[main].mb);
+  $("zip-list").innerHTML = Object.entries(ZIP_LABELS).filter(([key]) => key !== main && zipInfo[key]).map(([key, label]) => `
+    <a class="zip-link" href="${ZIP_BASE}${zipInfo[key].file}" download>
+      ${ICON_DOWNLOAD}<span class="zip-link-name">${t(label)}</span><span class="zip-link-size">${zipInfo[key].mb} MB</span>
     </a>`).join("");
   $("download-all").hidden = false;
 }
 
-/* ---------- Viewer ---------- */
+/* ---------- Viewer and slideshow ---------- */
 
 const viewer = $("viewer");
 const viewerImg = $("viewer-img");
-const blobs = new Map(); // url -> Promise<Blob>, so sharing on a phone can start straight away
+const blobs = new Map(); // url -> Promise<Blob>, so "Save Image" on iPhone can open straight away
+let viewerList = [];
 let viewerIndex = 0;
+let showSeq = 0;
+let playing = null;
 
-function openViewer(i) {
-  stopAutoplay();
+function openViewer(list, i) {
+  viewerList = list;
+  viewerImg.removeAttribute("src"); // don't flash the last photo while the new one loads
   document.documentElement.style.overflow = "hidden";
-  viewer.showModal();
+  if (typeof viewer.showModal === "function") viewer.showModal();
+  else viewer.setAttribute("open", ""); // very old browsers without <dialog>
   showInViewer(i, false);
   $("close").focus();
 }
 
+function closeViewer() {
+  if (typeof viewer.close === "function") viewer.close();
+  else { viewer.removeAttribute("open"); onViewerClosed(); }
+}
+
+function onViewerClosed() {
+  pause();
+  document.documentElement.style.overflow = "";
+}
+
 function showInViewer(i, fade = true) {
-  viewerIndex = (i + photos.length) % photos.length;
-  const p = photos[viewerIndex];
+  if (!viewerList.length) return;
+  viewerIndex = (i + viewerList.length) % viewerList.length;
+  const p = viewerList[viewerIndex];
   const url = src(p, "large");
-  const swap = () => { viewerImg.src = url; viewerImg.alt = t("alt", viewerIndex + 1); };
+  const seq = ++showSeq;
+  const swap = () => {
+    if (seq !== showSeq) return; // a newer photo was asked for meanwhile
+    viewerImg.src = url;
+    viewerImg.alt = t("alt", number(p));
+    viewerImg.classList.remove("fading");
+  };
   if (fade) {
     viewerImg.classList.add("fading");
     const pre = new Image();
-    pre.onload = pre.onerror = () => { swap(); viewerImg.classList.remove("fading"); };
+    pre.onload = pre.onerror = swap;
     pre.src = url;
   } else {
     swap();
   }
-  $("viewer-count").textContent = t("count", viewerIndex + 1, photos.length);
-  if (touch && navigator.canShare) blob(url);
+  $("viewer-count").textContent = t("count", viewerIndex + 1, viewerList.length);
+  if (shareToSave) blob(url);
   // Warm up the neighbours so the next photo appears instantly.
-  [1, -1].forEach((d) => { new Image().src = src(photos[(viewerIndex + d + photos.length) % photos.length], "large"); });
+  [1, -1].forEach((d) => { new Image().src = src(viewerList[(viewerIndex + d + viewerList.length) % viewerList.length], "large"); });
+}
+
+function step(d) { pause(); showInViewer(viewerIndex + d); }
+
+function play() {
+  if (playing) return;
+  playing = setInterval(() => { if (!document.hidden) showInViewer(viewerIndex + 1); }, SLIDESHOW_MS);
+  updatePlay();
+}
+
+function pause() {
+  clearInterval(playing);
+  playing = null;
+  updatePlay();
+}
+
+function updatePlay() {
+  const b = $("play");
+  b.setAttribute("aria-pressed", Boolean(playing));
+  b.classList.toggle("is-playing", Boolean(playing));
+  $("play-label").textContent = t(playing ? "pause" : "slideshow");
 }
 
 function blob(url) {
-  if (!blobs.has(url)) blobs.set(url, fetch(url).then((r) => r.blob()));
+  if (!blobs.has(url)) {
+    const pending = fetch(url).then((r) => { if (!r.ok) throw new Error(r.status); return r.blob(); });
+    pending.catch(() => blobs.delete(url)); // try again next time instead of remembering a failure
+    blobs.set(url, pending);
+    while (blobs.size > 6) blobs.delete(blobs.keys().next().value);
+  }
   return blobs.get(url);
 }
 
+let toastTimer;
+function showToast(text) {
+  const el = $("toast");
+  // An open viewer sits above the page, so the tip has to live inside it to be seen.
+  const host = viewer.open ? viewer : document.body;
+  if (el.parentElement !== host) host.append(el);
+  el.textContent = text;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 6000);
+}
+
 async function downloadPhoto(p) {
+  pause();
   const url = src(p, "large");
-  const n = String(photos.indexOf(p) + 1).padStart(2, "0");
+  const n = String(number(p)).padStart(2, "0");
   const name = `Niki-and-Balazs-${n}${state.tone === "bw" ? "-bw" : ""}${state.framed ? "-framed" : ""}.jpg`;
 
-  // Phones: the share sheet offers "Save Image", which puts it in the photo library.
-  if (touch && navigator.canShare) {
+  if (shareToSave) {
     try {
       const file = new File([await blob(url)], name, { type: "image/jpeg" });
       if (navigator.canShare({ files: [file] })) {
+        showToast(t("saveTip"));
         await navigator.share({ files: [file] });
         return;
       }
@@ -411,14 +474,16 @@ async function downloadPhoto(p) {
 }
 
 function setupViewer() {
-  $("close").addEventListener("click", () => viewer.close());
-  viewer.addEventListener("close", () => { document.documentElement.style.overflow = ""; });
-  $("viewer-prev").addEventListener("click", () => showInViewer(viewerIndex - 1));
-  $("viewer-next").addEventListener("click", () => showInViewer(viewerIndex + 1));
-  $("download").addEventListener("click", () => downloadPhoto(photos[viewerIndex]));
+  $("close").addEventListener("click", closeViewer);
+  viewer.addEventListener("close", onViewerClosed);
+  $("viewer-prev").addEventListener("click", () => step(-1));
+  $("viewer-next").addEventListener("click", () => step(1));
+  $("play").addEventListener("click", () => (playing ? pause() : play()));
+  $("download").addEventListener("click", () => downloadPhoto(viewerList[viewerIndex]));
   viewer.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowRight") showInViewer(viewerIndex + 1);
-    if (e.key === "ArrowLeft") showInViewer(viewerIndex - 1);
+    if (e.key === "ArrowRight") step(1);
+    if (e.key === "ArrowLeft") step(-1);
+    if (e.key === "Escape" && typeof viewer.showModal !== "function") closeViewer();
   });
 
   // One-finger horizontal swipe changes photo; pinch-zoom is left to the browser.
@@ -432,23 +497,32 @@ function setupViewer() {
     const dx = e.changedTouches[0].clientX - start.x;
     const dy = e.changedTouches[0].clientY - start.y;
     start = null;
-    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) showInViewer(viewerIndex + (dx < 0 ? 1 : -1));
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) step(dx < 0 ? 1 : -1);
   });
 }
 
 /* ---------- Start ---------- */
 
 renderLanguages();
+setupViewer();
+applyLanguage(); // text appears in the chosen language straight away
+
 fetch("photos.json")
-  .then((r) => r.json())
+  .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
   .then((data) => {
     photos = data.photos;
     byId = Object.fromEntries(photos.map((p) => [p.id, p]));
+    deck = byId[OPENER_ID] ? [byId[OPENER_ID], ...photos.filter((p) => p.id !== OPENER_ID)] : photos.slice();
     zipInfo = data.zips || null;
     document.body.classList.toggle("is-framed", state.framed);
     buildGallery();
     buildCarousel();
-    setupViewer();
     applyLanguage();
     applyVersion();
+  })
+  .catch((err) => {
+    console.error(err);
+    loadFailed = true;
+    document.body.classList.add("load-failed");
+    applyLanguage();
   });

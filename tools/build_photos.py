@@ -76,9 +76,8 @@ def main():
             with Image.open(SOURCE / folder / name) as im:
                 icc = im.info.get("icc_profile")  # keep the colour profile (sRGB)
                 im = ImageOps.exif_transpose(im).convert("RGB")
-                for size, (edge, q) in SIZES.items():
-                    w, h = save(im, OUT / key / size / f"{pid}.jpg", edge, q, icc)
-                entry["v"][key] = [w, h]  # size of the large copy
+                sizes = {size: save(im, OUT / key / size / f"{pid}.jpg", edge, q, icc) for size, (edge, q) in SIZES.items()}
+                entry["v"][key] = list(sizes["large"])
                 if MAKE_ZIPS:
                     zips[key].writestr(f"Niki & Balazs - {label.replace('-', ' ')}/Niki-and-Balazs-{number:02d}.jpg", full_size_bytes(im, icc))
         photos.append(entry)
