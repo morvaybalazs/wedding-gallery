@@ -442,7 +442,8 @@ function openViewer(list, i, fromImg) {
   if (typeof viewer.showModal === "function") viewer.showModal();
   else viewer.setAttribute("open", ""); // very old browsers without <dialog>
   history.pushState({ viewer: true }, ""); // the phone's Back gesture closes the photo instead of leaving
-  opened = fromImg && fromImg.complete && fromImg.naturalWidth > 0 ? growFrom(fromImg, zoom) : Promise.resolve();
+  if (fromImg && fromImg.complete && fromImg.naturalWidth > 0) opened = growFrom(fromImg, zoom);
+  else { opened = Promise.resolve(); showWash(list[i]); }
   showInViewer(i);
   if (!touch) $("close").focus();
 }
@@ -474,6 +475,20 @@ function growFrom(fromImg, zoom) {
       { duration: 450, easing: EASE },
     ).finished.catch(() => {});
   });
+}
+
+// Photo not downloaded yet (a quick tap on a slow connection): show its colour wash
+// at the right size until the photo itself fades in over it.
+function showWash(p) {
+  const r = stage.getBoundingClientRect();
+  const fit = Math.min((r.width - 32) / ratio(p), r.height - 12);
+  if (!(fit > 0)) return;
+  const wash = document.createElement("div");
+  wash.className = "wash shown";
+  wash.style.width = `${fit * ratio(p)}px`;
+  wash.style.height = `${fit}px`;
+  placeholder(wash, p);
+  stage.append(wash);
 }
 
 function closeViewer() {
@@ -518,7 +533,7 @@ function showInViewer(i, how) {
 
   const reveal = () => {
     if (seq !== showSeq) return; // a newer photo was asked for meanwhile
-    stage.querySelectorAll("img:not(.leaving)").forEach((old) => {
+    stage.querySelectorAll(":scope > :not(.leaving)").forEach((old) => {
       old.classList.add("leaving");
       if (how === "next") old.classList.add("to-left");
       if (how === "prev") old.classList.add("to-right");

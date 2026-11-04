@@ -621,6 +621,12 @@ main {
   opacity: 0;
   transition: opacity .35s ease, transform .5s var(--ease);
 }
+.viewer-stage .wash {
+  grid-area: 1 / 1;
+  background-color: var(--line);
+  transition: opacity .35s ease;
+}
+.viewer-stage .wash.leaving { opacity: 0; }
 .viewer-stage img.from-right { transform: translateX(40px); }
 .viewer-stage img.from-left { transform: translateX(-40px); }
 .viewer-stage img.shown { opacity: 1; transform: none; }
