@@ -528,17 +528,33 @@ main {
   grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
   padding: 6px 16px;
+  overflow: hidden;
   touch-action: pan-y pinch-zoom;
 }
+
+/* Every photo is its own layer in the same cell: the new one fades in over the old. */
 .viewer-stage img {
+  grid-area: 1 / 1;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
   user-select: none;
   -webkit-user-drag: none;
-  transition: opacity .3s ease;
+  opacity: 0;
+  transition: opacity .35s ease, transform .5s cubic-bezier(.2, .7, .2, 1);
 }
-.viewer-stage img.fading { opacity: 0; }
+.viewer-stage img.from-right { transform: translateX(40px); }
+.viewer-stage img.from-left { transform: translateX(-40px); }
+.viewer-stage img.shown { opacity: 1; transform: none; }
+.viewer-stage img.shown.leaving { opacity: 0; }
+.viewer-stage img.shown.leaving.to-left { transform: translateX(-40px); }
+.viewer-stage img.shown.leaving.to-right { transform: translateX(40px); }
+
+/* Slideshow: a slower crossfade and a slow, gentle zoom while each photo is shown. */
+.viewer-stage img.drift, .viewer-stage img.slow { transition-duration: .9s; }
+.viewer-stage img.drift.shown { animation: drift 4.2s ease-out forwards; }
+@keyframes drift { from { transform: scale(1); } to { transform: scale(1.04); } }
+
 .is-framed .viewer-stage img { box-shadow: var(--print); }
 
 .download {
@@ -639,5 +655,5 @@ main {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; scroll-behavior: auto !important; }
+  * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }

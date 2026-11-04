@@ -8,7 +8,7 @@ const CHAPTERS = [
 ];
 const OPENER_ID = "20";  // the carousel starts with the two of us, then runs in order
 const PREVIEW_ID = "30"; // the photo on the "Download all" card
-const SLIDESHOW_MS = 3500;
+const SLIDESHOW_MS = 3000;
 const ZIP_BASE = "https://github.com/morvaybalazs/wedding-gallery/releases/download/photos/";
 const ZIP_LABELS = { "framed-bw": "zipFramedBw", "framed-colour": "zipFramedColour", "bw": "zipBw", "colour": "zipColour" };
 const ICON_DOWNLOAD = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>';
@@ -34,18 +34,11 @@ let loadFailed = false;
 /* ---------- Language ---------- */
 
 const codes = LANGUAGES.map((l) => l.code);
-// Order: a ?lang= link, then the visitor's own pick, then the phone's language
-// if it is Polish or Hungarian, otherwise English. Only a pick is remembered.
-let lang = (() => {
-  const fromLink = new URLSearchParams(location.search).get("lang");
-  if (codes.includes(fromLink)) return fromLink;
-  const saved = store.get("gallery-lang");
-  if (codes.includes(saved)) return saved;
-  const fromPhone = (navigator.languages || [navigator.language])
-    .map((l) => String(l || "").slice(0, 2).toLowerCase())
-    .find((c) => codes.includes(c));
-  return fromPhone || "en";
-})();
+// Always English, unless the link asks for Polish or Hungarian (?lang=pl / ?lang=hu).
+// A tap on a flag changes the language for this visit only.
+const linkLang = new URLSearchParams(location.search).get("lang");
+let lang = codes.includes(linkLang) ? linkLang : "en";
+try { localStorage.removeItem("gallery-lang"); } catch {} // forget picks saved by older versions
 
 function t(key, ...args) {
   const value = STRINGS[lang][key] ?? STRINGS.en[key];
@@ -65,11 +58,13 @@ function renderLanguages() {
 
 function setLanguage(code) {
   lang = code;
-  store.set("gallery-lang", code);
-  // Keep the choice in the address, so a copied link opens in the same language.
+  // Only adjust a ?lang= the link already had, so a reload keeps the pick.
+  // Never add one: a link copied from the address bar should open in English.
   const url = new URL(location.href);
-  if (code === "en") url.searchParams.delete("lang"); else url.searchParams.set("lang", code);
-  history.replaceState(null, "", url);
+  if (url.searchParams.has("lang")) {
+    if (code === "en") url.searchParams.delete("lang"); else url.searchParams.set("lang", code);
+    history.replaceState(null, "", url);
+  }
   applyLanguage();
 }
 
@@ -95,7 +90,10 @@ function applyLanguage() {
   buildZips();
   markCurrent();
   updatePlay();
-  if (viewer.open) showInViewer(viewerIndex, false);
+  if (viewer.open && viewerList.length) {
+    $("viewer-count").textContent = t("count", viewerIndex + 1, viewerList.length);
+    stage.querySelectorAll("img").forEach((el) => { el.alt = t("alt", number(viewerList[viewerIndex])); });
+  }
 }
 
 /* ---------- Black & white and Framed switches ---------- */
@@ -158,7 +156,7 @@ function applyVersion() {
     }
     el.closest("[data-r]").style.setProperty("--r", ratio(p));
   });
-  if (viewer.open) showInViewer(viewerIndex, false);
+  if (viewer.open) showInViewer(viewerIndex);
   else if (shareToSave && deck[current]) blob(src(deck[current], "large"));
   buildZips();
   layoutRows();
@@ -358,7 +356,7 @@ function buildZips() {
 /* ---------- Viewer and slideshow ---------- */
 
 const viewer = $("viewer");
-const viewerImg = $("viewer-img");
+const stage = $("stage");
 const blobs = new Map(); // url -> Promise<Blob>, so "Save Image" on iPhone can open straight away
 let viewerList = [];
 let viewerIndex = 0;
@@ -367,11 +365,11 @@ let playing = null;
 
 function openViewer(list, i) {
   viewerList = list;
-  viewerImg.removeAttribute("src"); // don't flash the last photo while the new one loads
+  stage.replaceChildren(); // don't flash the last photo while the new one loads
   document.documentElement.style.overflow = "hidden";
   if (typeof viewer.showModal === "function") viewer.showModal();
   else viewer.setAttribute("open", ""); // very old browsers without <dialog>
-  showInViewer(i, false);
+  showInViewer(i);
   $("close").focus();
 }
 
@@ -385,37 +383,49 @@ function onViewerClosed() {
   document.documentElement.style.overflow = "";
 }
 
-function showInViewer(i, fade = true) {
+// Each photo is a new layer that fades in over the last one.
+// how: "next"/"prev" slide in slightly from that side, "auto" is the slideshow
+// (slower crossfade with a gentle zoom), anything else is a plain quick fade.
+function showInViewer(i, how) {
   if (!viewerList.length) return;
   viewerIndex = (i + viewerList.length) % viewerList.length;
   const p = viewerList[viewerIndex];
   const url = src(p, "large");
   const seq = ++showSeq;
-  const swap = () => {
+
+  const incoming = new Image();
+  incoming.alt = t("alt", number(p));
+  incoming.draggable = false;
+  if (how === "next") incoming.classList.add("from-right");
+  if (how === "prev") incoming.classList.add("from-left");
+  if (how === "auto") incoming.classList.add("drift");
+  incoming.src = url;
+
+  const reveal = () => {
     if (seq !== showSeq) return; // a newer photo was asked for meanwhile
-    viewerImg.src = url;
-    viewerImg.alt = t("alt", number(p));
-    viewerImg.classList.remove("fading");
+    stage.querySelectorAll("img:not(.leaving)").forEach((old) => {
+      old.classList.add("leaving");
+      if (how === "next") old.classList.add("to-left");
+      if (how === "prev") old.classList.add("to-right");
+      if (how === "auto") old.classList.add("slow");
+      setTimeout(() => old.remove(), 1200);
+    });
+    stage.append(incoming);
+    requestAnimationFrame(() => requestAnimationFrame(() => incoming.classList.add("shown")));
   };
-  if (fade) {
-    viewerImg.classList.add("fading");
-    const pre = new Image();
-    pre.onload = pre.onerror = swap;
-    pre.src = url;
-  } else {
-    swap();
-  }
+  incoming.decode().then(reveal, reveal);
+
   $("viewer-count").textContent = t("count", viewerIndex + 1, viewerList.length);
   if (shareToSave) blob(url);
   // Warm up the neighbours so the next photo appears instantly.
   [1, -1].forEach((d) => { new Image().src = src(viewerList[(viewerIndex + d + viewerList.length) % viewerList.length], "large"); });
 }
 
-function step(d) { pause(); showInViewer(viewerIndex + d); }
+function step(d) { pause(); showInViewer(viewerIndex + d, d > 0 ? "next" : "prev"); }
 
 function play() {
   if (playing) return;
-  playing = setInterval(() => { if (!document.hidden) showInViewer(viewerIndex + 1); }, SLIDESHOW_MS);
+  playing = setInterval(() => { if (!document.hidden) showInViewer(viewerIndex + 1, "auto"); }, SLIDESHOW_MS);
   updatePlay();
 }
 
@@ -429,6 +439,7 @@ function updatePlay() {
   const b = $("play");
   b.setAttribute("aria-pressed", Boolean(playing));
   b.classList.toggle("is-playing", Boolean(playing));
+  viewer.classList.toggle("playing", Boolean(playing));
   $("play-label").textContent = t(playing ? "pause" : "slideshow");
 }
 
@@ -494,7 +505,6 @@ function setupViewer() {
   });
 
   // One-finger horizontal swipe changes photo; pinch-zoom is left to the browser.
-  const stage = viewerImg.parentElement;
   let start = null;
   stage.addEventListener("touchstart", (e) => {
     start = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
